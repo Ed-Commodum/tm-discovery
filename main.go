@@ -1,6 +1,9 @@
 package main
 
-import "flag"
+import (
+	"flag"
+	"fmt"
+)
 
 const (
 	defaultChainId     = "vega-mainnet-0011"
@@ -15,7 +18,7 @@ var (
 )
 
 func init() {
-
+	fmt.Println("Preparing config...")
 	flag.StringVar(&chainId, "chain-id", defaultChainId, "The chain ID of the network for discovery.")
 	flag.StringVar(&initialRpcs, "initial-rpcs", defaultInitialRpcs, "A comma separated list of initial TM RPC addresses")
 	flag.BoolVar(&inferChainId, "infer-chain-id", false, "When flag is set, infer chain ID from initialRpcs")
@@ -23,5 +26,7 @@ func init() {
 }
 
 func main() {
-
+	config := parseFlags()
+	finder := NewFinder(config)
+	finder.Start()
 }
