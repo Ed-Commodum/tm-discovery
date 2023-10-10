@@ -13,7 +13,7 @@ go build -o tm-discover
 ./tm-discover
 ```
 
-By default the binary will start searching using some hardcoded RPC addresses on the Vega Protocol([website](vega.xyz) [github](github.com/vegaprotocol)) mainnet.You can privide a comma separated list of RPCs to search through like so:
+By default the binary will start searching using some hardcoded RPC addresses on the Vega Protocol ([website](vega.xyz)/[github](github.com/vegaprotocol)) mainnet.You can privide a comma separated list of RPCs to search through like so:
 ```
 ./tm-discover --initial-rpcs="https://foo.bar/rpc,http://111.222.333.444:26657"
 ```
