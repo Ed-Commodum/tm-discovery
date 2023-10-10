@@ -7,7 +7,7 @@ This tool discovers TM RPCs and peer addresses on Tendermint/CometBFT networks b
 
 
 ```
-git pull https://github.com/Ed-Commodum/tm-discovery.git
+git clone https://github.com/Ed-Commodum/tm-discovery.git
 cd vega-discovery
 go build -o tm-discover
 ./tm-discover
