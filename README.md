@@ -5,6 +5,7 @@ This tool discovers TM RPCs and peer addresses on Tendermint/CometBFT networks b
 
 ## Usage
 
+[Install Go](https://go.dev/doc/install)
 
 ```
 git clone https://github.com/Ed-Commodum/tm-discovery.git
