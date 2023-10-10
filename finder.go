@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 
 	"log"
@@ -213,8 +214,10 @@ func (finder *finder) dialPeer(peer rpcTypes.Peer) {
 
 func (finder *finder) generateStateSyncConfig() {
 
+	idx := rand.Intn(len(finder.successfulRpcs) - 1)
+
 	// Select two RPCs for statesync config
-	rpcs := []string{finder.successfulRpcs[0], finder.successfulRpcs[1]}
+	rpcs := []string{finder.successfulRpcs[idx], finder.successfulRpcs[idx+1]}
 
 	// Call RPC to get recent block height and block hash
 	res, err := finder.client.Get(rpcs[0] + "/block")
