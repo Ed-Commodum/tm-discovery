@@ -3,11 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os/signal"
+	"syscall"
 )
 
 const (
 	defaultChainId     = "vega-mainnet-0011"
-	defaultInitialRpcs = "165.232.126.207:26657,164.92.138.136:26657,185.246.86.71:26657,134.122.64.6:26657,39.59.237.19"
+	defaultInitialRpcs = "http://165.232.126.207:26657,http://164.92.138.136:26657,http://185.246.86.71:26657,http://134.122.64.6:26657,http://39.59.237.19:26657"
 )
 
 var (
@@ -29,4 +31,7 @@ func main() {
 	config := parseFlags()
 	finder := NewFinder(config)
 	finder.Start()
+
+	signal.Notify(finder.stopChan, syscall.SIGTERM, syscall.SIGINT)
+	<-finder.stopChan
 }
