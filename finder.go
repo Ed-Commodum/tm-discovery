@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 
-	// "log"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	rpcTypes "github.com/cometbft/cometbft/rpc/core/types"
+	// rpcTypes "github.com/vegaprotocol/cometbft/rpc/jsonrpc/types"
 )
 
 type finder struct {
@@ -22,6 +23,8 @@ type finder struct {
 
 	chainId     string
 	initialRpcs string
+
+	stateSync bool
 
 	toCheck chan rpcTypes.Peer
 
@@ -44,10 +47,18 @@ type finder struct {
 }
 
 func NewFinder(config *Config) *finder {
+
+	// Check whether chainId should be inferred from initial RPCs
+	chainId := config.ChainId
+	if config.InferChainId {
+		chainId = ""
+	}
+
 	return &finder{
 		mu:              sync.Mutex{},
-		chainId:         config.ChainId,
+		chainId:         chainId,
 		initialRpcs:     config.InitialRpcs,
+		stateSync:       config.StateSync,
 		toCheck:         make(chan rpcTypes.Peer),
 		client:          http.Client{Timeout: 5 * time.Second},
 		numRpcsRunning:  0,
@@ -77,6 +88,9 @@ func (finder *finder) Start() {
 					fmt.Printf("All IPs tested.\n")
 					fmt.Printf("Successful RPCs: \"%v\"\n", strings.Join(finder.successfulRpcs, ","))
 					fmt.Printf("Successful Peers: \"%v\"\n", strings.Join(finder.successfulPeers, ","))
+					if finder.stateSync {
+						finder.generateStateSyncConfig()
+					}
 					finder.stopChan <- syscall.SIGTERM
 				}
 				finder.mu.Unlock()
@@ -97,6 +111,12 @@ func (finder *finder) Start() {
 }
 
 type jsonResponse struct {
+	JsonRpc string         `json:"jsonrpc"`
+	Id      int            `json:"id"`
+	Result  map[string]any `json:"result"`
+}
+
+type jsonResponseNetInfo struct {
 	JsonRpc string                 `json:"jsonrpc"`
 	Id      int                    `json:"id"`
 	Result  rpcTypes.ResultNetInfo `json:"result"`
@@ -130,7 +150,7 @@ func (finder *finder) callRpc(rpcAddr string) {
 		return
 	}
 
-	decoded := &jsonResponse{}
+	decoded := &jsonResponseNetInfo{}
 	json.Unmarshal(body, decoded)
 
 	// fmt.Printf("Response body: %v\n", decoded)
@@ -144,9 +164,14 @@ func (finder *finder) callRpc(rpcAddr string) {
 			finder.mu.Unlock()
 			continue
 		}
-		finder.mu.Unlock()
 
-		finder.mu.Lock()
+		// Check chainId
+		if finder.chainId == "" {
+			finder.chainId = peer.NodeInfo.Network
+		} else if finder.chainId != peer.NodeInfo.Network {
+			log.Fatal("Multiple chainIds detected, ensure all initialRPCs are on the same network. \n Exiting.")
+		}
+
 		finder.ips[peer.RemoteIP] = struct{}{}
 		finder.mu.Unlock()
 		finder.toCheck <- peer
@@ -165,7 +190,7 @@ func (finder *finder) dialPeer(peer rpcTypes.Peer) {
 	finder.numPeersRunning++
 	finder.mu.Unlock()
 
-	peerAddr := string(peer.NodeInfo.DefaultNodeID) + peer.RemoteIP + ":26656"
+	peerAddr := string(peer.NodeInfo.DefaultNodeID) + "@" + peer.RemoteIP + ":26656"
 	conn, err := net.DialTimeout("tcp", peer.RemoteIP+":26656", time.Second*3)
 	if err != nil {
 		// log.Printf("Couldn't connect to peer at %v", peerAddr)
@@ -184,4 +209,39 @@ func (finder *finder) dialPeer(peer rpcTypes.Peer) {
 	finder.successfulPeers = append(finder.successfulPeers, peerAddr)
 	finder.mu.Unlock()
 	conn.Close()
+}
+
+func (finder *finder) generateStateSyncConfig() {
+
+	// Select two RPCs for statesync config
+	rpcs := []string{finder.successfulRpcs[0], finder.successfulRpcs[1]}
+
+	// Call RPC to get recent block height and block hash
+	res, err := finder.client.Get(rpcs[0] + "/block")
+	if err != nil {
+		log.Fatalf("Failed to get recent block: %v\n", err)
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal json response: %v\n", err)
+	}
+
+	decoded := &jsonResponse{}
+	json.Unmarshal(body, decoded)
+
+	blockHash := decoded.Result["block_id"].(map[string]any)["hash"]
+	blockHeight := decoded.Result["block"].(map[string]any)["header"].(map[string]any)["height"]
+
+	// fmt.Printf("Block Hash: %v\n", blockHash)
+	// fmt.Printf("Block Height: %v\n", blockHeight)
+
+	stateSyncConfigStr := fmt.Sprintf("rpc_servers = \"%v\"\ntrust_height = %v\ntrust_hash = \"%v\"\n", strings.Join(rpcs, ","), blockHeight, blockHash)
+
+	fmt.Printf("Statesync config:\n\n%v\n", stateSyncConfigStr)
+
+	// rpc_servers = "sn010.validators-testnet.vega.xyz:40107,sn011.validators-testnet.vega.xyz:40117"
+	// trust_height = 0
+	// trust_hash = ""
+
 }

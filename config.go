@@ -62,7 +62,7 @@ func checkDefaults() {
 	})
 
 	isSet := map[string]bool{"chain-id": false, "initial-rpcs": false}
-	for name, _ := range isSet {
+	for name := range isSet {
 		flag.Visit(func(f *flag.Flag) {
 			if f.Name == name {
 				isSet[name] = true
