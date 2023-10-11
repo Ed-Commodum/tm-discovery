@@ -227,7 +227,7 @@ func (finder *finder) generateStateSyncConfig() {
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal json response: %v\n", err)
+		log.Fatalf("Failed to read response body: %v\n", err)
 	}
 
 	decoded := &jsonResponse{}
