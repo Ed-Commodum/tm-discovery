@@ -4,6 +4,7 @@ This tool discovers TM RPCs and peer addresses on Tendermint/CometBFT networks b
 
 
 ## Usage
+### With local Go development environment
 
 [Install Go](https://go.dev/doc/install)
 
@@ -31,4 +32,12 @@ You can use the --state-sync flag to generate statesync config which will be pri
 
 ```
 ./tm-discover --state-sync
+```
+
+### With Docker
+```
+git clone https://github.com/Ed-Commodum/tm-discovery.git
+cd tm-discovery
+docker build . -t tm-discovery
+docker run -it tm-discovery
 ```
