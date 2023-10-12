@@ -84,7 +84,7 @@ func (finder *finder) Start() {
 			case <-ticker.C:
 				finder.mu.Lock()
 				fmt.Printf("Testing RPCs... %v running and %v found\n", finder.numRpcsRunning, len(finder.successfulRpcs))
-				fmt.Printf("Testing Peers... %v running and %v found\nn", finder.numPeersRunning, len(finder.successfulPeers))
+				fmt.Printf("Testing Peers... %v running and %v found\n", finder.numPeersRunning, len(finder.successfulPeers))
 				if finder.numRpcsRunning == 0 && finder.numPeersRunning == 0 {
 					fmt.Printf("All IPs tested.\n\n")
 					fmt.Printf("Successful RPCs: \"%v\"\n\n", strings.Join(finder.successfulRpcs, ","))
