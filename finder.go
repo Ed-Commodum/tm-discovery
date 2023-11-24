@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +16,10 @@ import (
 	"syscall"
 	"time"
 
+	vegaApiPb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	rpcTypes "github.com/cometbft/cometbft/rpc/core/types"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	// rpcTypes "github.com/vegaprotocol/cometbft/rpc/jsonrpc/types"
 )
 
@@ -31,10 +35,12 @@ type finder struct {
 
 	client http.Client
 
-	numRpcsRunning   int
-	numRpcsFinished  int
-	numPeersRunning  int
-	numPeersFinished int
+	numRpcsRunning      int
+	numRpcsFinished     int
+	numPeersRunning     int
+	numPeersFinished    int
+	numCoreApisRunning  int
+	numCoreApisFinished int
 
 	ips map[string]struct{}
 
@@ -43,6 +49,9 @@ type finder struct {
 
 	successfulPeers []string
 	failedPeers     []string
+
+	successfulCoreApis []string
+	failedCoreApis     []string
 
 	stopChan chan os.Signal
 }
@@ -85,10 +94,12 @@ func (finder *finder) Start() {
 				finder.mu.Lock()
 				fmt.Printf("Testing RPCs... %v running and %v found\n", finder.numRpcsRunning, len(finder.successfulRpcs))
 				fmt.Printf("Testing Peers... %v running and %v found\n", finder.numPeersRunning, len(finder.successfulPeers))
-				if finder.numRpcsRunning == 0 && finder.numPeersRunning == 0 {
+				fmt.Printf("Testing Core APIs... %v running and %v found\n", finder.numCoreApisRunning, len(finder.successfulCoreApis))
+				if finder.numRpcsRunning == 0 && finder.numPeersRunning == 0 && finder.numCoreApisRunning == 0 {
 					fmt.Printf("All IPs tested.\n\n")
 					fmt.Printf("Successful RPCs: \"%v\"\n\n", strings.Join(finder.successfulRpcs, ","))
 					fmt.Printf("Successful Peers: \"%v\"\n\n", strings.Join(finder.successfulPeers, ","))
+					fmt.Printf("Successful Core APIs: \"%v\"\n\n", strings.Join(finder.successfulCoreApis, ","))
 					if finder.stateSync {
 						finder.generateStateSyncConfig()
 					}
@@ -99,8 +110,11 @@ func (finder *finder) Start() {
 				// Check RPC
 				go finder.callRpc(fmt.Sprintf("http://%v:26657", peer.RemoteIP))
 
-				// Check peer (better version will attempt to connect to peer
+				// Check peer better version will attempt to connect to peer
 				go finder.dialPeer(peer)
+
+				// Call Vega Core API
+				go finder.callCoreApi(fmt.Sprintf("%v:3002", peer.RemoteIP))
 			}
 		}
 	}()
@@ -198,7 +212,7 @@ func (finder *finder) dialPeer(peer rpcTypes.Peer) {
 		finder.mu.Lock()
 		finder.numPeersRunning--
 		finder.numPeersFinished++
-		finder.failedPeers = append(finder.successfulPeers, peerAddr)
+		finder.failedPeers = append(finder.failedPeers, peerAddr)
 		finder.mu.Unlock()
 		return
 	}
@@ -208,6 +222,49 @@ func (finder *finder) dialPeer(peer rpcTypes.Peer) {
 	finder.numPeersRunning--
 	finder.numPeersFinished++
 	finder.successfulPeers = append(finder.successfulPeers, peerAddr)
+	finder.mu.Unlock()
+	conn.Close()
+}
+
+func (finder *finder) callCoreApi(addr string) {
+
+	finder.mu.Lock()
+	finder.numCoreApisRunning++
+	finder.mu.Unlock()
+
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		// log.Printf("Could not open connection to core node (%v): %v", addr, err)
+		finder.mu.Lock()
+		finder.numCoreApisRunning--
+		finder.numCoreApisFinished++
+		finder.failedCoreApis = append(finder.failedCoreApis, addr)
+		finder.mu.Unlock()
+		return
+	}
+
+	grpcClient := vegaApiPb.NewCoreServiceClient(conn)
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*5))
+	defer cancel()
+	_, err = grpcClient.LastBlockHeight(ctx, &vegaApiPb.LastBlockHeightRequest{})
+	if err != nil {
+		// log.Printf("Could not get last block from url: %v. Error: %v", addr, err)
+		finder.mu.Lock()
+		finder.numCoreApisRunning--
+		finder.numCoreApisFinished++
+		finder.failedCoreApis = append(finder.failedCoreApis, addr)
+		finder.mu.Unlock()
+		conn.Close()
+		return
+	}
+
+	// log.Printf("Successful response from core API. Last block height: %v\n", res.Height)
+
+	finder.mu.Lock()
+	finder.numCoreApisRunning--
+	finder.numCoreApisFinished++
+	finder.successfulCoreApis = append(finder.successfulCoreApis, addr)
 	finder.mu.Unlock()
 	conn.Close()
 }
