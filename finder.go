@@ -121,6 +121,7 @@ func (finder *finder) Start() {
 
 	rpcs := strings.Split(finder.initialRpcs, ",")
 	for _, rpcAddr := range rpcs {
+		log.Printf("RPC Address: %v\n", rpcAddr)
 		go finder.callRpc(rpcAddr)
 	}
 }
