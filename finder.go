@@ -185,6 +185,7 @@ func (finder *finder) callRpc(rpcAddr string) {
 		if finder.chainId == "" {
 			finder.chainId = peer.NodeInfo.Network
 		} else if finder.chainId != peer.NodeInfo.Network {
+			log.Printf("Peer Node Info: %+v\n", peer.NodeInfo)
 			log.Printf("Finder ChainId: %v\n", finder.chainId)
 			log.Printf("Peer ChainID: %v\n", peer.NodeInfo.Network)
 			log.Fatal("Multiple chainIds detected, ensure all initialRPCs are on the same network. \n Exiting.")
